@@ -1,0 +1,7 @@
+AGENT.md
+node_modules/
+dist/
+src/generated/prisma/
+.env
+uploads/*
+!uploads/.gitkeep
