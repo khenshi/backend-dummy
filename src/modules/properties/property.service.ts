@@ -1,21 +1,14 @@
-import fs from 'fs/promises';
-import path from 'path';
 import { Prisma, Property } from '../../generated/prisma/client.js';
 import { prisma } from '../../lib/prisma.js';
 import { ApiError } from '../../utils/api-error.js';
-import { PropertyRepository } from './property.repository.js';
 import { createPropertySchema, listPropertyQuerySchema, propertyIdSchema, updatePropertySchema } from './property.schema.js';
 
-const repository = new PropertyRepository(prisma);
-
-function serializeProperty(property: Property) {
-  const { imagePath, ...data } = property;
+function serializeProperty(property: Omit<Property, 'imageData'>) {
+  const { imageMimeType, ...data } = property;
   return {
     ...data,
-    latitude: Number(property.latitude),
-    longitude: Number(property.longitude),
     price: Number(property.price),
-    imageUrl: imagePath ? `/uploads/${imagePath}` : null,
+    imageUrl: imageMimeType ? `/api/properties/${property.id}/image` : null,
   };
 }
 
@@ -30,21 +23,6 @@ function toNullableDate(value?: string | null) {
   }
 
   return parsed;
-}
-
-async function deleteLocalImage(imagePath?: string | null) {
-  if (!imagePath) {
-    return;
-  }
-
-  const absolutePath = path.resolve(process.cwd(), 'uploads', path.basename(imagePath));
-  try {
-    await fs.unlink(absolutePath);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      console.error('Unable to remove property image');
-    }
-  }
 }
 
 function validateId(id: string) {
@@ -74,18 +52,41 @@ export async function getAllProperties(query: Record<string, unknown>) {
     where.numberOfRooms = { gte: filters.minRooms };
   }
 
-  const properties = await repository.findMany(where);
+  const properties = await prisma.property.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    omit: { imageData: true },
+  });
   return properties.map(serializeProperty);
 }
 
 export async function getPropertyById(id: string) {
   id = validateId(id);
-  const property = await repository.findUnique(id);
+  const property = await prisma.property.findUnique({
+    where: { id },
+    omit: { imageData: true },
+  });
   if (!property) {
     throw new ApiError('Property not found', 404);
   }
 
   return serializeProperty(property);
+}
+
+export async function getPropertyImage(id: string) {
+  id = validateId(id);
+  const image = await prisma.property.findUnique({
+    where: { id },
+    select: { imageData: true, imageMimeType: true },
+  });
+  if (!image) {
+    throw new ApiError('Property not found', 404);
+  }
+  if (!image.imageData || !image.imageMimeType) {
+    throw new ApiError('Property image not found', 404);
+  }
+
+  return { data: Buffer.from(image.imageData), mimeType: image.imageMimeType };
 }
 
 export async function createProperty(input: Record<string, unknown>, file?: Express.Multer.File) {
@@ -97,20 +98,28 @@ export async function createProperty(input: Record<string, unknown>, file?: Expr
     availableDate: new Date(parsed.availableDate),
     inspectionAt: parsed.inspectionAt ? toNullableDate(parsed.inspectionAt) : null,
     isAvailable: parsed.isAvailable,
-    latitude: parsed.latitude,
-    longitude: parsed.longitude,
+    latitude: Number(parsed.latitude),
+    longitude: Number(parsed.longitude),
     price: parsed.price,
     numberOfRooms: parsed.numberOfRooms,
-    imagePath: file ? file.filename : null,
+    propertyType: parsed.propertyType,
+    imageData: file ? new Uint8Array(file.buffer) : undefined,
+    imageMimeType: file?.mimetype,
   };
 
-  const property = await repository.create(data);
+  const property = await prisma.property.create({
+    data,
+    omit: { imageData: true },
+  });
   return serializeProperty(property);
 }
 
 export async function updateProperty(id: string, input: Record<string, unknown>, file?: Express.Multer.File) {
   id = validateId(id);
-  const existing = await repository.findUnique(id);
+  const existing = await prisma.property.findUnique({
+    where: { id },
+    select: { id: true },
+  });
   if (!existing) {
     throw new ApiError('Property not found', 404);
   }
@@ -134,10 +143,10 @@ export async function updateProperty(id: string, input: Record<string, unknown>,
     updateData.isAvailable = parsed.isAvailable;
   }
   if (parsed.latitude !== undefined) {
-    updateData.latitude = parsed.latitude;
+    updateData.latitude = Number(parsed.latitude);
   }
   if (parsed.longitude !== undefined) {
-    updateData.longitude = parsed.longitude;
+    updateData.longitude = Number(parsed.longitude);
   }
   if (parsed.price !== undefined) {
     updateData.price = parsed.price;
@@ -145,27 +154,33 @@ export async function updateProperty(id: string, input: Record<string, unknown>,
   if (parsed.numberOfRooms !== undefined) {
     updateData.numberOfRooms = parsed.numberOfRooms;
   }
+  if (parsed.propertyType !== undefined) {
+    updateData.propertyType = parsed.propertyType;
+  }
 
   if (file) {
-    updateData.imagePath = file.filename;
+    updateData.imageData = new Uint8Array(file.buffer);
+    updateData.imageMimeType = file.mimetype;
   }
 
-  const property = await repository.update(id, updateData);
-
-  if (file && existing.imagePath) {
-    await deleteLocalImage(existing.imagePath);
-  }
+  const property = await prisma.property.update({
+    where: { id },
+    data: updateData,
+    omit: { imageData: true },
+  });
 
   return serializeProperty(property);
 }
 
 export async function deleteProperty(id: string) {
   id = validateId(id);
-  const existing = await repository.findUnique(id);
+  const existing = await prisma.property.findUnique({
+    where: { id },
+    select: { id: true },
+  });
   if (!existing) {
     throw new ApiError('Property not found', 404);
   }
 
-  await repository.delete(id);
-  await deleteLocalImage(existing.imagePath);
+  await prisma.property.delete({ where: { id } });
 }

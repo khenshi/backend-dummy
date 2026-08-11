@@ -6,13 +6,15 @@ const multipartBoolean = z.union([z.boolean(), z.enum(['true', 'false'])]).trans
   return typeof value === 'boolean' ? value : value === 'true';
 });
 
+export const propertyTypes = ['HOUSE', 'APARTMENT', 'CONDO', 'TOWNHOUSE', 'COMMERCIAL'] as const;
+
 const optionalDate = z.preprocess(
   (value) => (value === '' ? null : value),
   z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Invalid inspectionAt').nullable().optional(),
 );
 
 export const createPropertySchema = z.object({
-  title: z.string().trim().min(1, 'Title is required'),
+  title: z.string().trim().min(1, 'Title is required').max(255, 'Title must be at most 255 characters'),
   description: z.string().trim().min(1, 'Description is required'),
   availableDate: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Invalid availableDate'),
   inspectionAt: optionalDate,
@@ -21,11 +23,13 @@ export const createPropertySchema = z.object({
   longitude: decimalString.refine((value) => Number(value) >= -180 && Number(value) <= 180, 'Longitude must be between -180 and 180'),
   price: decimalString.refine((value) => Number(value) >= 0, 'Price must be greater than or equal to 0'),
   numberOfRooms: z.coerce.number().int().positive(),
+  propertyType: z.enum(propertyTypes).default('HOUSE'),
 });
 
 export const updatePropertySchema = createPropertySchema.partial().extend({
-  title: z.string().trim().min(1, 'Title is required').optional(),
+  title: z.string().trim().min(1, 'Title is required').max(255, 'Title must be at most 255 characters').optional(),
   description: z.string().trim().min(1, 'Description is required').optional(),
+  propertyType: z.enum(propertyTypes).optional(),
 });
 
 export const propertyIdSchema = z.object({

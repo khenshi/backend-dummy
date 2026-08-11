@@ -1,0 +1,16 @@
+CREATE TYPE "PropertyType" AS ENUM (
+    'HOUSE',
+    'APARTMENT',
+    'CONDO',
+    'TOWNHOUSE',
+    'COMMERCIAL'
+);
+
+ALTER TABLE "Property"
+    ALTER COLUMN "title" TYPE VARCHAR(255),
+    ALTER COLUMN "latitude" TYPE DOUBLE PRECISION USING "latitude"::DOUBLE PRECISION,
+    ALTER COLUMN "longitude" TYPE DOUBLE PRECISION USING "longitude"::DOUBLE PRECISION,
+    DROP COLUMN "imagePath",
+    ADD COLUMN "imageData" BYTEA,
+    ADD COLUMN "imageMimeType" VARCHAR(50),
+    ADD COLUMN "propertyType" "PropertyType" NOT NULL DEFAULT 'HOUSE';

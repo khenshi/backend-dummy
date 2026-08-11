@@ -7,18 +7,28 @@ datasource db {
   provider = "postgresql"
 }
 
+enum PropertyType {
+  HOUSE
+  APARTMENT
+  CONDO
+  TOWNHOUSE
+  COMMERCIAL
+}
+
 model Property {
-  id            String    @id @default(uuid()) @db.Uuid
-  title         String
-  description   String    @db.Text
-  availableDate DateTime  @db.Date
+  id            String       @id @default(uuid()) @db.Uuid
+  title         String       @db.VarChar(255)
+  description   String       @db.Text
+  availableDate DateTime     @db.Date
   inspectionAt  DateTime?
-  isAvailable   Boolean   @default(true)
-  imagePath     String?
-  latitude      Decimal   @db.Decimal(9, 6)
-  longitude     Decimal   @db.Decimal(9, 6)
-  price         Decimal   @db.Decimal(10, 2)
+  isAvailable   Boolean      @default(true)
+  imageData     Bytes?
+  imageMimeType String?      @db.VarChar(50)
+  latitude      Float        @db.DoublePrecision
+  longitude     Float        @db.DoublePrecision
+  price         Decimal      @db.Decimal(10, 2)
   numberOfRooms Int
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  propertyType  PropertyType @default(HOUSE)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 }

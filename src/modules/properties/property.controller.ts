@@ -1,6 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { createProperty, deleteProperty, getAllProperties, getPropertyById, updateProperty } from './property.service.js';
-import { deleteUploadedFile } from '../../middleware/upload.js';
+import { createProperty, deleteProperty, getAllProperties, getPropertyById, getPropertyImage, updateProperty } from './property.service.js';
 
 export async function listProperties(req: Request, res: Response, next: NextFunction) {
   try {
@@ -21,12 +20,21 @@ export async function getProperty(req: Request, res: Response, next: NextFunctio
   }
 }
 
+export async function getPropertyImageHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const image = await getPropertyImage(id);
+    res.type(image.mimeType).send(image.data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function createPropertyHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const property = await createProperty(req.body, req.file);
     res.status(201).json({ success: true, data: property });
   } catch (error) {
-    await deleteUploadedFile(req.file);
     next(error);
   }
 }
@@ -37,7 +45,6 @@ export async function updatePropertyHandler(req: Request, res: Response, next: N
     const property = await updateProperty(id, req.body, req.file);
     res.json({ success: true, data: property });
   } catch (error) {
-    await deleteUploadedFile(req.file);
     next(error);
   }
 }
